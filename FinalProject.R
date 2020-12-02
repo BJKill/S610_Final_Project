@@ -5,6 +5,11 @@
 ## either our forward selection or backwards elimination algorithm can settle on the model containing only the k "real" predictors.
 ## We will have n observations, no intercept, and the linear model will take the form Y ~ 1*X1 + 2*X2 + 3*X3 + ...
 
+library(readr)
+library(plyr)
+library(dplyr)
+library(stringr)
+
 make_model_matrix <- function(n,p) {
         X <- matrix(nrow = n, ncol = p)
         #X[ ,1] <- rep(1,n)
@@ -42,19 +47,22 @@ run_BE <- function(n,p,k,alpha) {
                 df <- df[,-rem_inx]
         }
         display <- cbind(summary(lm(Y~.,df))$coefficients,confint(lm(Y~.,df)))
-        #print(class(display))
         display <- cbind(display,vector(length = nrow(display)))
-        #print(display)
-        for (i in 1:nrow(display)) {
-                        display[i,7] <- (display[i,1] >= display[i,5]) & (display[i,1] <= display[i,6])
+        colnames(display)[7] <- "Known Param in CI?"
+        display[1,7] <- (0 >= display[1,5]) & (0 <= display[1,6])
+        for (i in 2:nrow(display)) {
+                        display[i,7] <- (as.numeric(str_sub(rownames(display)[i], 2,-1)) >= display[i,5]) & 
+                                        (as.numeric(str_sub(rownames(display)[i], 2,-1)) <= display[i,6])
+                                      
                 }
         return(display)
 }
 
-run_BE(100,50,10,0.05)
+final <- run_BE(100,50,10,0.05)
+final
+
 #debug(run_BE)
 
-#summary(lm(Y~V1+V2+V3, df)
 
 
 
