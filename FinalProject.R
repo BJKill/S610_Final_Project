@@ -116,14 +116,13 @@ run_simulation <- function(n,p,k,alpha,m) {
 }
 
 n <- 150
-p <- 25
-k <- 20
-alpha <- 0.01
-m <- 150
+p <- 50
+k <- 15
+alpha <- 0.02
+m <- 1000
 
 BE <- run_BE(n,p,k,alpha)
 BE
-
 
 output <- run_simulation(n,p,k,alpha,m)
 output
