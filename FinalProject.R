@@ -9,76 +9,123 @@ library(readr)
 library(plyr)
 library(dplyr)
 library(stringr)
+library(HyperbolicDist)
 
+
+## Make a matrix of predictors to put in the model
 make_model_matrix <- function(n,p) {
-        if (n <= 0 | p <= 0 | is.integer(n) = F | is.integer(p) = F) {return("n and p must be positive integers")}
+        if (n <= 0 | p <= 0 | is.wholenumber(n) == FALSE | is.wholenumber(p) == FALSE) {return("n and p must be positive integers")}
+        if (n < p+2) {return("n must be at least p+2")}
+        else {
         X <- matrix(nrow = n, ncol = p)
         for (i in 1:p) {
                 X[ ,i] <- rnorm(n)
         }
         return(X)
+        }
 }
 
-
-make_response_vector <- function(X, k) {
-        if (k > ncol(X) | is.integer(k) = F) {return("k must be a positive integer not exceeding p")}
-        Y <- vector(length = nrow(X))
-        for (i in 1:nrow(X)) {
+## Makes a vector of response values (y's) based on the first k predictor variables (x's)
+make_response_vector <- function(pred_mat, k) {
+        if (k <= 0 | k > ncol(pred_mat) | is.wholenumber(k) == FALSE) {return("k must be a positive integer not exceeding p")}
+        Y <- vector(length = nrow(pred_mat))
+        for (i in 1:nrow(pred_mat)) {
                 Y[i] <- rnorm(1)
                 for (j in 1:k) {
-                        Y[i] <- Y[i] + X[i,j]*j
+                        Y[i] <- Y[i] + pred_mat[i,j]*j
                 }
         }
         return(Y)
 }
 
-
+## creates a data frame of predictors and the response
 make_data_frame <- function(n,p,k) {
+      if (n <= 0 | p <= 0 | is.wholenumber(n) == FALSE | is.wholenumber(p) == FALSE) {return("n and p must be positive integers")}
+      if (n < p+2) {return("n must be at least p+2")}
+      if (k <= 0 | k > p | is.wholenumber(k) == FALSE) {return("k must be a positive integer not exceeding p")}
+      else {
       X <- make_model_matrix(n,p)
       Y <- make_response_vector(X,k)
       df <- data.frame(cbind(X,Y))
       return(df)
+      }
 }
 
-
+## Runs a single round of backwards elimination on the generated data
 run_BE <- function(n,p,k,alpha) {
-        df <- make_data_frame(n,p,k)
         if (alpha < 0 | alpha > 1) {return("alpha must be in the interval (0,1)")}
+        if (n <= 0 | p <= 0 | is.wholenumber(n) == FALSE | is.wholenumber(p) == FALSE) {return("n and p must be positive integers")}
+        if (n < p+2) {return("n must be at least p+2")}
+        if (k <= 0 | k > p | is.wholenumber(k) == FALSE) {return("k must be a positive integer not exceeding p")}
+        else {
+        df <- make_data_frame(n,p,k)
         while(summary(lm(Y~.,df))$coefficients[1+which.max(summary(lm(Y~., df))$coefficients[-1,4]),4] > alpha) {
                 rem_inx <- which.max(summary(lm(Y~., df))$coefficients[-1,4])
                 df <- df[,-rem_inx]
         }
-        display <- cbind(summary(lm(Y~.,df))$coefficients,confint(lm(Y~.,df)))
+        lm1 <- lm(Y~.,df)
+        display <- cbind(summary(lm1)$coefficients,confint(lm1))
         display <- cbind(display,vector(length = nrow(display)))
         colnames(display)[7] <- "Known Param in CI?"
         display[1,7] <- (0 >= display[1,5]) & (0 <= display[1,6])
         for (i in 2:nrow(display)) {
-                        display[i,7] <- (as.numeric(str_sub(rownames(display)[i], 2,-1)) >= display[i,5]) & 
-                                        (as.numeric(str_sub(rownames(display)[i], 2,-1)) <= display[i,6])
+                        index <- as.numeric(str_sub(rownames(display)[i], 2,-1))
+                        display[i,7] <- (index >= display[i,5]) & (index <= display[i,6])
                                       
                 }
         return(display)
+        }
 }
 
-final <- run_BE(100,50,10,0.05)
-final
+#final <- run_BE(100,50,10,0.05)
+#final
 
 #debug(run_BE)
 
+## Runs m simulations of backwards elimination and prints the % of the time each predictor variable was
+## found to be significant and the % of the time the known parameter was in the confidence interval.
 run_simulation <- function(n,p,k,alpha,m) {
-        if (m <= 0 | is.integer(m) = F) {return("m must be a positive integer")}
+        if (m <= 0 | is.wholenumber(m) == FALSE) {return("m must be a positive integer")}
+        if (alpha < 0 | alpha > 1) {return("alpha must be in the interval (0,1)")}
+        if (n <= 0 | p <= 0 | is.wholenumber(n) == FALSE | is.wholenumber(p) == FALSE) {return("n and p must be positive integers")}
+        if (n < p+2) {return("n must be at least p+2")}
+        if (k <= 0 | k > p | is.wholenumber(k) == FALSE) {return("k must be a positive integer not exceeding p")}
+        else {
         CI_freq <- vector(length = p+1)
+        sig_freq <- vector(length = p+1)
         full_df <- make_data_frame(n,p,k)
-        names(CI_freq) <- rownames(summary(lm(Y~.,full_df))$coefficients)
+        var_names <- rownames(summary(lm(Y~.,full_df))$coefficients)
+        names(CI_freq) <- var_names
+        names(sig_freq) <- var_names
         for (i in 1:m) {
                 display <- run_BE(n,p,k,alpha)
                 CI_freq[1] <- CI_freq[1] + display[1,7]
+                sig_freq[1] <- sig_freq[1] + as.numeric(display[1,4] <= alpha)
                 for (j in 2:nrow(display)) {
-                        CI_freq[as.numeric(str_sub(rownames(display)[j], 2,-1))+1] <- CI_freq[as.numeric(str_sub(rownames(display)[j], 2,-1))+1] + display[j,7]
+                        index <- as.numeric(str_sub(rownames(display)[j], 2,-1))+1
+                        CI_freq[index] <- CI_freq[index] + display[j,7]
+                        sig_freq[index] <- sig_freq[index] + 1
                 }
         }
-        return(CI_freq / m)
+        CI_perc <- CI_freq / m
+        sig_perc <- sig_freq / m
+        accuracy_mat <- cbind(round(CI_perc*100,2), round((sig_freq / m)*100,2))
+        colnames(accuracy_mat) <- c("% Param in CI", "% Param Significant")
+        return(accuracy_mat)
+        }
 }
 
-run_simulation(100,50,10,0.05,1000)
+n <- 150
+p <- 25
+k <- 20
+alpha <- 0.01
+m <- 150
 
+BE <- run_BE(n,p,k,alpha)
+BE
+
+
+output <- run_simulation(n,p,k,alpha,m)
+output
+mean(output[2:(k+1),1])
+mean(output[c(1,(k+2):(p+1)),2])
