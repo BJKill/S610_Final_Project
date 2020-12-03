@@ -63,7 +63,22 @@ final
 
 #debug(run_BE)
 
-
+run_simulation <- function(n,p,k,aplha,m) {
+        CI_freq <- vector(length = p+1)
+        #display_array <- array(dim = c(n,p,m))
+        #rownames(CI_freq) <- rownames(summ)
+        for (i in 1:m) {
+                display <- run_BE(n,p,k,alpha)
+                CI_freq[1] <- CI_freq[1] + display[1,7]
+                for (j in 2:nrow(display)) {
+                        CI_freq[as.numeric(str_sub(rownames(display)[j], 2,-1))+1] <- CI_freq[as.numeric(str_sub(rownames(display)[j], 2,-1))+1] + display[j,7]
+                }
+                #display_array[,,i] <- display
+        }
+        #print(display_array[,,1])
+        #print(display_array[,,2])
+        return(CI_freq / m)
+}
 
 
 
