@@ -1,0 +1,17 @@
+---
+title: "STAT-S 610 Final Project"
+author: "BJKill"
+date: "12/3/2020"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(readr)
+library(plyr)
+library(dplyr)
+library(stringr)
+library(HyperbolicDist)
+```
+
+
