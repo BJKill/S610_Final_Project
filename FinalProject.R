@@ -69,7 +69,8 @@ run_BE <- function(n,p,k,alpha) {
                 maxp_ind <- which.max(summary(lm1)$coefficients[-1,4])
                 maxp_val <- summary(lm1)$coefficients[1+maxp_ind,4]
         }
-        display <- cbind(summary(lm1)$coefficients,confint(lm1),vector(length = nrow(display)))
+        coef_mat <- summary(lm1)$coefficients
+        display <- cbind(coef_mat,confint(lm1),vector(length = nrow(coef_mat)))
         colnames(display)[7] <- "Known Param in CI?"
         display[1,7] <- (0 >= display[1,5]) & (0 <= display[1,6])
         for (i in 2:nrow(display)) {
@@ -118,16 +119,4 @@ run_simulation <- function(n,p,k,alpha,m) {
         }
 }
 
-n <- 150
-p <- 50
-k <- 15
-alpha <- 0.02
-m <- 1000
 
-BE <- run_BE(n,p,k,alpha)
-BE
-
-output <- run_simulation(n,p,k,alpha,m)
-output
-mean(output[2:(k+1),1])
-mean(output[c(1,(k+2):(p+1)),2])
