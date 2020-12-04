@@ -3,15 +3,261 @@ title: "STAT-S 610 Final Project"
 author: "BJKill"
 date: "12/3/2020"
 output: pdf_document
+classoption: landscape
+geometry: margin=1.5cm
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+options(width = 120)
 library(readr)
 library(plyr)
 library(dplyr)
 library(stringr)
 library(HyperbolicDist)
 ```
+
+When simulating our data for our linear model, we need to know
+
+1. How many observations or data points we have, $n$, such that $n \in \mathbb{N}$
+2. How many predictor variables we have, $p$, such that $p\in \mathbb{N},\;1\le p\le n-2$
+3. How many of those predictor variables are the "good" ones, $k$, such that $k\in \mathbb{N},\;1\le k\le n$
+4. How many times we generate the data and run backwards elimination on it, $m$, such that $m\in \mathbb{N}$
+5. The significance level we will be using, $\alpha$, such that $\alpha \in (0,1)$
+
+Let's say we have
+```{r, message=FALSE}
+n <- 100        # observations
+p <- 30         # predictor vars
+k <- 15         # valid predictor vars
+m <- 125        # simulations
+alpha <- 0.05   # sig level
+```
+
+\newpage
+
+The first thing we must do is to generate the data.
+```{r, message=FALSE, tidy=TRUE}
+make_model_matrix <- function(n,p) {
+        if (n <= 0 | p <= 0 | is.wholenumber(n) == FALSE | is.wholenumber(p) == FALSE) {return("n and p must be positive integers")}
+        if (n < p+2) {return("n must be at least p+2")}
+        else {
+        X <- matrix(nrow = n, ncol = p)
+        for (i in 1:p) {
+                X[ ,i] <- rnorm(n)
+        }
+        return(X)
+        }
+}
+```
+
+Here is what it gives us:
+```{r, message=FALSE}
+X_mat <- make_model_matrix(n,p)
+dim(X_mat)
+head(X_mat)
+```
+
+
+
+Then, we will use the first $k$ predictor variables as the basis for generating our y values.  For simplicity, we will not have an intercept, we will give each predictor variable the same coefficient as its index, and we will use a standard normal error term, like so:
+$$Y \sim N(0,1) + \sum_{i=1}^{k}k*X_k$$
+
+$$or,$$
+
+$$Y \sim 1X_1+2X_2+3X_3 + \ldots + kX_k + \epsilon$$
+\newpage
+Here is how we'll do it:
+```{r, message=FALSE, tidy=TRUE}
+make_response_vector <- function(pred_mat, k) {
+        if (k <= 0 | k > ncol(pred_mat) | is.wholenumber(k) == FALSE) {return("k must be a positive integer not exceeding p")}
+        Y <- vector(length = nrow(pred_mat))
+        for (i in 1:nrow(pred_mat)) {
+                Y[i] <- rnorm(1)
+                for (j in 1:k) {
+                        Y[i] <- Y[i] + pred_mat[i,j]*j
+                }
+        }
+        return(Y)
+}
+```
+
+
+Using our example `X_mat` from before, here is what we get for our response values.
+```{r}
+Y_vec <- make_response_vector(X_mat,k)
+length(Y_vec)
+Y_vec
+```
+
+
+\newpage
+We will then create a function that can generate the data and combine the response and the predictors into a single data frame in order for us to use R's built-in `lm` function.
+```{r, message=FALSE, tidy=TRUE}
+make_data_frame <- function(n,p,k) {
+      if (n <= 0 | p <= 0 | is.wholenumber(n) == FALSE | is.wholenumber(p) == FALSE) {return("n and p must be positive integers")}
+      if (n < p+2) {return("n must be at least p+2")}
+      if (k <= 0 | k > p | is.wholenumber(k) == FALSE) {return("k must be a positive integer not exceeding p")}
+      else {
+      X <- make_model_matrix(n,p)
+      Y <- make_response_vector(X,k)
+      df <- data.frame(cbind(X,Y))
+      return(df)
+      }
+}
+```
+
+\newpage
+Let's use this to create a new data frame and see what we get.
+```{r, message=FALSE}
+our_df <- make_data_frame(n,p,k)
+head(our_df)
+```
+
+\newpage
+Now that we can generate a data frame just the way we like it, we can create a function that generates a data frame and systematically eliminates the least significant variable (highest p-value) from the linear model one at a time until all of the variables left have p-values that are at most our pre-determined significance level, $\alpha$. It will return the coefficient matrix of the final linear model along with the $100(1-\alpha)\%$ CI for each parameter and an indicator of whether the CI for that parameter contained the known parameter.
+
+```{r, message=FALSE, tidy=TRUE}
+run_BE <- function(n,p,k,alpha) {
+        if (alpha < 0 | alpha > 1) {return("alpha must be in the interval (0,1)")}
+        if (n <= 0 | p <= 0 | is.wholenumber(n) == FALSE | is.wholenumber(p) == FALSE) {return("n and p must be positive integers")}
+        if (n < p+2) {return("n must be at least p+2")}
+        if (k <= 0 | k > p | is.wholenumber(k) == FALSE) {return("k must be a positive integer not exceeding p")}
+        else {
+        df <- make_data_frame(n,p,k)
+        while(summary(lm(Y~.,df))$coefficients[1+which.max(summary(lm(Y~., df))$coefficients[-1,4]),4] > alpha) {
+                rem_inx <- which.max(summary(lm(Y~., df))$coefficients[-1,4])
+                df <- df[,-rem_inx]
+        }
+        lm1 <- lm(Y~.,df)
+        display <- cbind(summary(lm1)$coefficients,confint(lm1))
+        display <- cbind(display,vector(length = nrow(display)))
+        colnames(display)[7] <- "Known Param in CI?"
+        display[1,7] <- (0 >= display[1,5]) & (0 <= display[1,6])
+        for (i in 2:nrow(display)) {
+                        index <- as.numeric(str_sub(rownames(display)[i], 2,-1))
+                        display[i,7] <- (index >= display[i,5]) & (index <= display[i,6])
+                                      
+                }
+        return(display)
+        }
+}
+```
+
+\newpage
+To take a quick peek under the hood, let's create a data frame and see what the while loop is checking for.
+```{r, message=FALSE, tidy=TRUE}
+our_df2 <- make_data_frame(n,p,k)
+our_lm <- lm(Y~.,our_df2)
+summary(our_lm)$coefficients
+which.max(summary(our_lm)$coefficients[-1,4])
+summary(our_lm)$coefficients[1+which.max(summary(our_lm)$coefficients[-1,4]),4]
+summary(our_lm)$coefficients[1+which.max(summary(our_lm)$coefficients[-1,4]),4] > alpha
+rem_inx <- which.max(summary(our_lm)$coefficients[-1,4])
+our_df2 <- our_df2[,-rem_inx]
+head(our_df2)
+```
+
+If any of the variables have a p-value greater than alpha, the `run_BE` function will repeat that process of removing the variable with the highest p-value until it settles on a model where all of the variables have significant p-values.
+
+\newpage
+Let's try it on for size and see what happens.
+```{r, message=FALSE}
+BE <- run_BE(n,p,k,alpha)
+BE
+```
+
+
+\newpage
+Now that we know our BE program works, we can have it run `m` times and compute aggregate data of our `m` simulations.  We want to know the proportion of times our model creates confidence intervals that contain the known parameter, as well as the proportion of the simulations that our model found each variable significant.
+
+```{r, message=FALSE, tidy=TRUE}
+run_simulation <- function(n,p,k,alpha,m) {
+        if (m <= 0 | is.wholenumber(m) == FALSE) {return("m must be a positive integer")}
+        if (alpha < 0 | alpha > 1) {return("alpha must be in the interval (0,1)")}
+        if (n <= 0 | p <= 0 | is.wholenumber(n) == FALSE | is.wholenumber(p) == FALSE) {return("n and p must be positive integers")}
+        if (n < p+2) {return("n must be at least p+2")}
+        if (k <= 0 | k > p | is.wholenumber(k) == FALSE) {return("k must be a positive integer not exceeding p")}
+        else {
+        CI_freq <- vector(length = p+1)
+        sig_freq <- vector(length = p+1)
+        full_df <- make_data_frame(n,p,k)
+        var_names <- rownames(summary(lm(Y~.,full_df))$coefficients)
+        names(CI_freq) <- var_names
+        names(sig_freq) <- var_names
+        for (i in 1:m) {
+                display <- run_BE(n,p,k,alpha)
+                CI_freq[1] <- CI_freq[1] + display[1,7]
+                sig_freq[1] <- sig_freq[1] + as.numeric(display[1,4] <= alpha)
+                for (j in 2:nrow(display)) {
+                        index <- as.numeric(str_sub(rownames(display)[j], 2,-1))+1
+                        CI_freq[index] <- CI_freq[index] + display[j,7]
+                        sig_freq[index] <- sig_freq[index] + 1
+                }
+        }
+        CI_perc <- CI_freq / m
+        sig_perc <- sig_freq / m
+        accuracy_mat <- cbind(round(CI_perc*100,2), round((sig_freq / m)*100,2))
+        colnames(accuracy_mat) <- c("% Param in CI", "% Param Significant")
+        return(accuracy_mat)
+        }
+}
+```
+
+\newpage
+Finally, let's go ahead and give it a whirl.  We'll do a few different simulations with different $n,p,k,\alpha$, and $m$ each time.  We'll start with our current values of `r n`, `r p`, `r k`, `r alpha`, and `r m`, respectively.
+```{r, message=FALSE, tidy=TRUE}
+output <- run_simulation(n,p,k,alpha,m)
+output
+c(mean(output[2:(k+1),1]),mean(output[c(1,(k+2):(p+1)),2])) 
+```
+
+\newpage
+One would expect that the model will be more accurate if you give it more data.  We originally gave it 100 data points. Let's see what happens if we halve that to $n=50$.
+```{r, message=FALSE, tidy=TRUE}
+n<-50
+output <- run_simulation(n,p,k,alpha,m)
+output
+c(mean(output[2:(k+1),1]),mean(output[c(1,(k+2):(p+1)),2])) 
+```
+
+
+\newpage
+Here, let's give the model less variables to work with, but let's make most of them "good".
+```{r, message=FALSE, tidy=TRUE}
+p<-10
+k<-7
+output <- run_simulation(n,p,k,alpha,m)
+output
+c(mean(output[2:(k+1),1]),mean(output[c(1,(k+2):(p+1)),2])) 
+```
+
+\newpage
+Now, let's revert back to our original input parameters and change the alpha to see what happens.
+```{r, message=FALSE}
+n<-100; p<-30; k<-15; alpha<-0.01; m<-125
+output <- run_simulation(n,p,k,alpha,m)
+output
+c(mean(output[2:(k+1),1]),mean(output[c(1,(k+2):(p+1)),2])) 
+```
+
+\newpage
+Finally, let's make it really work.  Let's say we have 200 data points on 100 predictor variables, of which 35 of them are "valid". We will run the simulation 1,000 times using $\alpha = 0.02$.  Let's see how it plays out!
+```{r}
+n<-200; p<-100; k<-35; alpha<-0.02; m<-1000
+output <- run_simulation(n,p,k,alpha,m)
+output
+c(mean(output[2:(k+1),1]),mean(output[c(1,(k+2):(p+1)),2])) 
+```
+
+
+
+
+
+
+
+
+
+
 
 
