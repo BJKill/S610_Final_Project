@@ -59,19 +59,22 @@ run_BE <- function(n,p,k,alpha) {
         if (k <= 0 | k > p | is.wholenumber(k) == FALSE) {return("k must be a positive integer not exceeding p")}
         else {
         df <- make_data_frame(n,p,k)
-        while(summary(lm(Y~.,df))$coefficients[1+which.max(summary(lm(Y~., df))$coefficients[-1,4]),4] > alpha) {
-                rem_inx <- which.max(summary(lm(Y~., df))$coefficients[-1,4])
-                df <- df[,-rem_inx]
-        }
         lm1 <- lm(Y~.,df)
-        display <- cbind(summary(lm1)$coefficients,confint(lm1))
-        display <- cbind(display,vector(length = nrow(display)))
+        maxp_ind <- which.max(summary(lm1)$coefficients[-1,4])
+        maxp_val <- summary(lm1)$coefficients[1+maxp_ind,4]
+        while(maxp_val > alpha) {
+                rem_inx <- maxp_ind
+                df <- df[,-rem_inx]
+                lm1 <- lm(Y~.,df)
+                maxp_ind <- which.max(summary(lm1)$coefficients[-1,4])
+                maxp_val <- summary(lm1)$coefficients[1+maxp_ind,4]
+        }
+        display <- cbind(summary(lm1)$coefficients,confint(lm1),vector(length = nrow(display)))
         colnames(display)[7] <- "Known Param in CI?"
         display[1,7] <- (0 >= display[1,5]) & (0 <= display[1,6])
         for (i in 2:nrow(display)) {
                         index <- as.numeric(str_sub(rownames(display)[i], 2,-1))
                         display[i,7] <- (index >= display[i,5]) & (index <= display[i,6])
-                                      
                 }
         return(display)
         }
