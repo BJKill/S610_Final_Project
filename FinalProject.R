@@ -14,20 +14,21 @@ library(HyperbolicDist)
 
 ## Make a matrix of predictors to put in the model
 make_model_matrix <- function(n,p) {
-        if (n <= 0 | p <= 0 | is.wholenumber(n) == FALSE | is.wholenumber(p) == FALSE) {return("n and p must be positive integers")}
-        if (n < p+2) {return("n must be at least p+2")}
-        else {
+        #if (n <= 0 | p <= 0 | is.wholenumber(n) == FALSE | is.wholenumber(p) == FALSE) {return("n and p must be positive integers")}
+        #if (n < p+2) {return("n must be at least p+2")}
+        #else {
         X <- matrix(nrow = n, ncol = p)
         for (i in 1:p) {
                 X[ ,i] <- rnorm(n)
         }
         return(X)
-        }
+        #}
 }
 
 ## Makes a vector of response values (y's) based on the first k predictor variables (x's)
 make_response_vector <- function(pred_mat, k) {
-        if (k <= 0 | k > ncol(pred_mat) | is.wholenumber(k) == FALSE) {return("k must be a positive integer not exceeding p")}
+        #if (k <= 0 | k > ncol(pred_mat) | is.wholenumber(k) == FALSE) {return("k must be a positive integer not exceeding p")}
+        #else {
         Y <- vector(length = nrow(pred_mat))
         for (i in 1:nrow(pred_mat)) {
                 Y[i] <- rnorm(1)
@@ -36,49 +37,51 @@ make_response_vector <- function(pred_mat, k) {
                 }
         }
         return(Y)
+        #}
 }
 
 ## creates a data frame of predictors and the response
 make_data_frame <- function(n,p,k) {
-      if (n <= 0 | p <= 0 | is.wholenumber(n) == FALSE | is.wholenumber(p) == FALSE) {return("n and p must be positive integers")}
-      if (n < p+2) {return("n must be at least p+2")}
-      if (k <= 0 | k > p | is.wholenumber(k) == FALSE) {return("k must be a positive integer not exceeding p")}
-      else {
+      #if (n <= 0 | p <= 0 | is.wholenumber(n) == FALSE | is.wholenumber(p) == FALSE) {return("n and p must be positive integers")}
+      #if (n < p+2) {return("n must be at least p+2")}
+      #if (k <= 0 | k > p | is.wholenumber(k) == FALSE) {return("k must be a positive integer not exceeding p")}
+      #else {
       X <- make_model_matrix(n,p)
       Y <- make_response_vector(X,k)
       df <- data.frame(cbind(X,Y))
       return(df)
-      }
+      #}
 }
 
 ## Runs a single round of backwards elimination on the generated data
 run_BE <- function(n,p,k,alpha) {
-        if (alpha < 0 | alpha > 1) {return("alpha must be in the interval (0,1)")}
-        if (n <= 0 | p <= 0 | is.wholenumber(n) == FALSE | is.wholenumber(p) == FALSE) {return("n and p must be positive integers")}
-        if (n < p+2) {return("n must be at least p+2")}
-        if (k <= 0 | k > p | is.wholenumber(k) == FALSE) {return("k must be a positive integer not exceeding p")}
-        else {
-        df <- make_data_frame(n,p,k)
-        lm1 <- lm(Y~.,df)
-        maxp_ind <- which.max(summary(lm1)$coefficients[-1,4])
-        maxp_val <- summary(lm1)$coefficients[1+maxp_ind,4]
-        while(maxp_val > alpha) {
-                rem_inx <- maxp_ind
-                df <- df[,-rem_inx]
-                lm1 <- lm(Y~.,df)
-                maxp_ind <- which.max(summary(lm1)$coefficients[-1,4])
-                maxp_val <- summary(lm1)$coefficients[1+maxp_ind,4]
-        }
-        coef_mat <- summary(lm1)$coefficients
-        display <- cbind(coef_mat,confint(lm1),vector(length = nrow(coef_mat)))
-        colnames(display)[7] <- "Known Param in CI?"
-        display[1,7] <- (0 >= display[1,5]) & (0 <= display[1,6])
-        for (i in 2:nrow(display)) {
-                        index <- as.numeric(str_sub(rownames(display)[i], 2,-1))
-                        display[i,7] <- (index >= display[i,5]) & (index <= display[i,6])
-                }
-        return(display)
-        }
+  #if (alpha < 0 | alpha > 1) {return("alpha must be in the interval (0,1)")}
+  #if (n <= 0 | p <= 0 | is.wholenumber(n) == FALSE | is.wholenumber(p) == FALSE) {return("n and p must be positive integers")}
+  #if (n < p+2) {return("n must be at least p+2")}
+  #if (k <= 0 | k > p | is.wholenumber(k) == FALSE) {return("k must be a positive integer not exceeding p")}
+  #else {
+  df <- make_data_frame(n,p,k)
+  lm1 <- lm(Y~.,df)
+  coef_mat <- summary(lm1)$coefficients
+  maxp_ind <- which.max(coef_mat[-1,4])
+  maxp_val <- coef_mat[1+maxp_ind,4]
+  while(maxp_val > alpha) {
+    rem_inx <- maxp_ind
+    df <- df[,-rem_inx]
+    lm1 <- lm(Y~.,df)
+    coef_mat <- summary(lm1)$coefficients
+    maxp_ind <- which.max(coef_mat[-1,4])
+    maxp_val <- coef_mat[1+maxp_ind,4]
+  }
+  display <- cbind(coef_mat,confint(lm1),vector(length = nrow(coef_mat)))
+  colnames(display)[7] <- "Known Param in CI?"
+  display[1,7] <- (0 >= display[1,5]) & (0 <= display[1,6])
+  for (i in 2:nrow(display)) {
+    index <- as.numeric(str_sub(rownames(display)[i], 2,-1))
+    display[i,7] <- (index >= display[i,5]) & (index <= display[i,6])
+  }
+  return(display)
+  #}
 }
 
 #final <- run_BE(100,50,10,0.05)
@@ -89,34 +92,46 @@ run_BE <- function(n,p,k,alpha) {
 ## Runs m simulations of backwards elimination and prints the % of the time each predictor variable was
 ## found to be significant and the % of the time the known parameter was in the confidence interval.
 run_simulation <- function(n,p,k,alpha,m) {
-        if (m <= 0 | is.wholenumber(m) == FALSE) {return("m must be a positive integer")}
-        if (alpha < 0 | alpha > 1) {return("alpha must be in the interval (0,1)")}
-        if (n <= 0 | p <= 0 | is.wholenumber(n) == FALSE | is.wholenumber(p) == FALSE) {return("n and p must be positive integers")}
-        if (n < p+2) {return("n must be at least p+2")}
-        if (k <= 0 | k > p | is.wholenumber(k) == FALSE) {return("k must be a positive integer not exceeding p")}
-        else {
-        CI_freq <- vector(length = p+1)
-        sig_freq <- vector(length = p+1)
-        full_df <- make_data_frame(n,p,k)
-        var_names <- rownames(summary(lm(Y~.,full_df))$coefficients)
-        names(CI_freq) <- var_names
-        names(sig_freq) <- var_names
-        for (i in 1:m) {
-                display <- run_BE(n,p,k,alpha)
-                CI_freq[1] <- CI_freq[1] + display[1,7]
-                sig_freq[1] <- sig_freq[1] + as.numeric(display[1,4] <= alpha)
-                for (j in 2:nrow(display)) {
-                        index <- as.numeric(str_sub(rownames(display)[j], 2,-1))+1
-                        CI_freq[index] <- CI_freq[index] + display[j,7]
-                        sig_freq[index] <- sig_freq[index] + 1
-                }
-        }
-        CI_perc <- CI_freq / m
-        sig_perc <- sig_freq / m
-        accuracy_mat <- cbind(round(CI_perc*100,2), round((sig_freq / m)*100,2))
-        colnames(accuracy_mat) <- c("% Param in CI", "% Param Significant")
-        return(accuracy_mat)
-        }
+  if (m <= 0 | is.wholenumber(m) == FALSE) {return("m must be a positive integer")}
+  if (alpha < 0 | alpha > 1) {return("alpha must be in the interval (0,1)")}
+  if (n <= 0 | p <= 0 | is.wholenumber(n) == FALSE | is.wholenumber(p) == FALSE) {return("n and p must be positive integers")}
+  if (n < p+2) {return("n must be at least p+2")}
+  if (k <= 0 | k > p | is.wholenumber(k) == FALSE) {return("k must be a positive integer not exceeding p")}
+  else {
+    CI_freq <- vector(length = p+1)
+    sig_freq <- vector(length = p+1)
+    full_df <- make_data_frame(n,p,k)
+    var_names <- rownames(summary(lm(Y~.,full_df))$coefficients)
+    names(CI_freq) <- var_names
+    names(sig_freq) <- var_names
+    for (i in 1:m) {
+      display <- run_BE(n,p,k,alpha)
+      CI_freq[1] <- CI_freq[1] + display[1,7]
+      sig_freq[1] <- sig_freq[1] + as.numeric(display[1,4] <= alpha)
+      for (j in 2:nrow(display)) {
+        index <- as.numeric(str_sub(rownames(display)[j], 2,-1))+1
+        CI_freq[index] <- CI_freq[index] + display[j,7]
+        sig_freq[index] <- sig_freq[index] + 1
+      }
+    }
+    CI_perc <- CI_freq / m
+    sig_perc <- sig_freq / m
+    accuracy_mat <- cbind(round(CI_perc*100,2), round((sig_freq / m)*100,2))
+    accuracy_mat <- rbind(accuracy_mat, c(mean(output[2:(k+1),1]), mean(output[c(1,(k+2):(p+1)),2])))
+    colnames(accuracy_mat) <- c("% Param in CI", "% Param Significant")
+    rownames(accuracy_mat)[p+2] <- "Averages"
+    return(accuracy_mat)
+  }
 }
 
+n <- 150
+p <- 50
+k <- 15
+alpha <- 0.02
+m <- 150
 
+BE <- run_BE(n,p,k,alpha)
+BE
+
+output <- run_simulation(n,p,k,alpha,m)
+output
