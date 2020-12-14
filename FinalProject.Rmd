@@ -15,6 +15,7 @@ library(plyr)
 library(dplyr)
 library(stringr)
 library(HyperbolicDist)
+library(microbenchmark)
 ```
 
 When simulating our data for our linear model, we need to know
@@ -36,7 +37,7 @@ alpha <- 0.10   # sig level
 
 \newpage
 
-The first thing we must do is to generate the data.
+The first thing we must do is to generate the data. As I mentioned in my presentation, many of these functions can be done with the right version of `apply`, but my brain is just wired to think in nested for loops.  I have commented out the checks for garbage inputs into the sub-functions we will be calling, but have identical versions of them all in our main function. This was done simply in order to speed up computation time knitting time.  We will verify that the checks work in the main function later.
 ```{r, message=FALSE, tidy=TRUE}
 make_model_matrix <- function(n,p) {
         #if (n <= 0 | p <= 0 | is.wholenumber(n) == FALSE | is.wholenumber(p) == FALSE) {return("n and p must be positive integers")}
@@ -52,7 +53,7 @@ make_model_matrix <- function(n,p) {
 ```
 
 Here is what it gives us:
-```{r, message=FALSE}
+```{r, message=FALSE, tidy=TRUE}
 X_mat <- make_model_matrix(n,p)
 dim(X_mat)
 head(X_mat)
@@ -67,7 +68,7 @@ $$or,$$
 
 $$Y \sim 1X_1+2X_2+3X_3 + \ldots + kX_k + \epsilon$$
 \newpage
-Here is how we'll do it:
+Here is how we'll do it. It is also important to note that in OLS regression, the order of the predictor variables does not matter, so using the first `k` predictors instead of randomly selecting which `k` predictors to use is both mathematically allowable and computationally preferable.
 ```{r, message=FALSE, tidy=TRUE}
 make_response_vector <- function(pred_mat, k) {
         #if (k <= 0 | k > ncol(pred_mat) | is.wholenumber(k) == FALSE) {return("k must be a positive integer not exceeding p")}
@@ -86,7 +87,7 @@ make_response_vector <- function(pred_mat, k) {
 
 
 Using our example `X_mat` from before, here is what we get for our response values.
-```{r}
+```{r, message=FALSE, tidy=TRUE}
 Y_vec <- make_response_vector(X_mat,k)
 length(Y_vec)
 Y_vec
@@ -111,7 +112,7 @@ make_data_frame <- function(n,p,k) {
 
 \newpage
 Let's use this to create a new data frame and see what we get.
-```{r, message=FALSE}
+```{r, message=FALSE, tidy=TRUE}
 our_df <- make_data_frame(n,p,k)
 head(our_df)
 ```
@@ -139,7 +140,7 @@ run_BE <- function(n,p,k,alpha) {
                 maxp_ind <- which.max(coef_mat[-1,4])
                 maxp_val <- coef_mat[1+maxp_ind,4]
         }
-        display <- cbind(coef_mat,confint(lm1,level = 1-alpha),vector(length = nrow(coef_mat)))
+        display <- cbind(coef_mat,confint(lm1,level = (1-alpha)),vector(length = nrow(coef_mat)))
         colnames(display)[7] <- "Known Param in CI?"
         display[1,7] <- (0 >= display[1,5]) & (0 <= display[1,6])
         for (i in 2:nrow(display)) {
@@ -151,7 +152,7 @@ run_BE <- function(n,p,k,alpha) {
 }
 ```
 
-\newpage
+
 To take a quick peek under the hood, let's create a data frame and see what the while loop is checking for.
 ```{r, message=FALSE, tidy=TRUE}
 our_df2 <- make_data_frame(n,p,k)
@@ -172,16 +173,47 @@ our_maxp_val <- our_coef_mat[1+our_maxp_ind,4]; our_maxp_val
 If any of the variables have a p-value greater than alpha, the `run_BE` function will repeat that process of removing the variable with the highest p-value until it settles on a model where all of the variables have significant p-values.
 
 \newpage
-Let's try it on for size and see what happens.
+Now, when it comes to cleaning up and speeding up my code, I made HUGE time improvements by tinkering with how I set up `run_BE`.  At first, I think I may have had it in my head that minimizing the amount of code I typed would minimize the runtime; however, that's definitely not the case. Originally, I had something like this:
+```{r, message=FALSE, tidy=TRUE}
+run_BE_OLD <- function(n,p,k,alpha) {
+        df <- make_data_frame(n,p,k)
+        while(summary(lm(Y~.,df))$coefficients[1+which.max(summary(lm(Y~., df))$coefficients[-1,4]),4] > alpha) {
+                rem_inx <- which.max(summary(lm(Y~., df))$coefficients[-1,4])
+                df <- df[,-rem_inx]
+        }
+        display <- cbind(summary(lm(Y~.,df))$coefficients,confint(lm(Y~.,df)))
+        display <- cbind(display,vector(length = nrow(display)))
+        colnames(display)[7] <- "Known Param in CI?"
+        display[1,7] <- (0 >= display[1,5]) & (0 <= display[1,6])
+        for (i in 2:nrow(display)) {
+                        display[i,7] <- (as.numeric(str_sub(rownames(display)[i], 2,-1)) >= display[i,5]) & 
+                                        (as.numeric(str_sub(rownames(display)[i], 2,-1)) <= display[i,6])
+
+        }
+        return(display)
+}
+```
+
+If we look carefully, this function has to generate the linear model and extract the coefficient matrix three separate times in one iteration!  That's extremely inefficient, and the runtime of my code improved by what felt like an order of magnitude when I re-wrote the while loop so that it only had to generate the linear model, extract the coefficient matrix, identify the max p-value, check it against alpha, and potentially remove it from the model exactly once each iteration.  It was easily the biggest "eureka" moment I had throughout this entire process. The time it takes a human to read the code does not determine how long it takes a computer to process the code; I turned four lines of code into thirteen and saved hours of cumulative computation time (if you count every time I ran the code or knitted the document).
+
+Let us quickly compare the runtimes of these two functions by using the `microbenchmark` package/function.
 ```{r, message=FALSE}
-BE <- run_BE(n,p,k,alpha)
-BE
+microbenchmark(run_BE_OLD(n,p,k,alpha))
+microbenchmark(run_BE(n,p,k,alpha))
+```
+
+So, as expected, making the machine compute the linear model only once instead of three times per iteration cut our runtime down to about a third of what it was before. Nice!
+
+
+\newpage
+Okay, let's try it on for size and see what happens.
+```{r, message=FALSE}
+BE <- run_BE(n,p,k,alpha); BE
 ```
 
 Once more, with feeling!
-```{r}
-BE <- run_BE(n,p,k,alpha)
-BE
+```{r, message=FALSE}
+BE <- run_BE(n,p,k,alpha); BE
 ```
 
 \newpage
@@ -214,16 +246,19 @@ run_simulation <- function(n,p,k,alpha,m) {
         CI_perc <- CI_freq / m
         sig_perc <- sig_freq / m
         accuracy_mat <- cbind(round(CI_perc*100,2), round((sig_freq / m)*100,2))
-        accuracy_mat <- rbind(accuracy_mat, c(mean(accuracy_mat[2:(k+1),1]), mean(accuracy_mat[c(1,(k+2):(p+1)),2])))
+        if (p > 1) {
+          accuracy_mat <- rbind(accuracy_mat, c(mean(accuracy_mat[2:(k+1),1]), mean(accuracy_mat[c(1,(k+2):(p+1)),2])))
+          rownames(accuracy_mat)[p+2] <- "Averages"
+        }
+        
         colnames(accuracy_mat) <- c("% Param in CI", "% Param Significant")
-        rownames(accuracy_mat)[p+2] <- "Averages"
         return(accuracy_mat)
         }
 }
 ```
 
 Let's quickly parse through an iteration of the nested for loop to see what it's doing for us.
-```{r}
+```{r, message=FALSE, tidy=TRUE}
 CI_freq <- vector(length = p+1)
 sig_freq <- vector(length = p+1)
 full_df <- make_data_frame(n,p,k)
@@ -250,46 +285,91 @@ CI_freq; sig_freq
 
 
 \newpage
-Finally, let's go ahead and give it a whirl. We'll start with our current values of $n=$ `r n`, $p=$ `r p`, $k=$ `r k`, $\alpha=$ `r alpha`, and $m=$ `r m`. Appended to the end is the average % of the time it correctly captured the known parameters and the % of the time it incorrectly found a "bad" parameter significant.
-```{r, message=FALSE, tidy=TRUE}
-output <- run_simulation(n,p,k,alpha,m)
-output
+Alright, let's go ahead and give it a whirl. We'll start with our current values of $n=$ `r n`, $p=$ `r p`, $k=$ `r k`, $\alpha=$ `r alpha`, and $m=$ `r m`. Appended to the end is the average % of the time it correctly captured the known parameters and the % of the time it incorrectly found a "bad" parameter significant.
+```{r, message=FALSE}
+output <- run_simulation(n,p,k,alpha,m); output
 ```
 
 \newpage
-One would expect that the model will be more accurate if you give it more data.  We originally gave it 100 data points. Let's see what happens if we halve that to $n=50$.
-```{r, message=FALSE, tidy=TRUE}
-n<-50
-output <- run_simulation(n,p,k,alpha,m)
-output
+Now that we know `run_simulation` works the way we want, let's verify that our checks for invalid input values work properly.
+```{r, message=FALSE}
+n<-10; p<-30; k<-15; alpha<-0.10; m <- 1000
+output <- run_simulation(n,p,k,alpha,m); output
+```
+```{r, message=FALSE}
+n<-100; p<-30.5; k<-15; alpha<-0.10; m <- 1000
+output <- run_simulation(n,p,k,alpha,m); output
+```
+```{r, message=FALSE}
+n<-100; p<-30; k<-35; alpha<-0.10; m <- 1000
+output <- run_simulation(n,p,k,alpha,m); output
+```
+```{r, message=FALSE}
+n<-100; p<-30; k<-15; alpha<-1.10; m <- 1000
+output <- run_simulation(n,p,k,alpha,m); output
+```
+```{r, message=FALSE}
+n<-100; p<-30; k<-15; alpha<-0.10; m <- 1000.2
+output <- run_simulation(n,p,k,alpha,m); output
+```
+```{r, message=FALSE}
+n<-100; p<-30; k<- -15; alpha<-0.10; m <- 1000
+output <- run_simulation(n,p,k,alpha,m); output
+```
+
+
+\newpage
+One might expect that the model to be less accurate if it is given it less data/information.  We originally gave it 100 data points. Let's see what happens if we halve that to $n=50$.
+```{r, message=FALSE}
+n<-50; p<-30; k<- 15; alpha<-0.10; m <- 1000
+output <- run_simulation(n,p,k,alpha,m); output
 ```
 
 
 \newpage
 Here, let's give the model less data and fewer variables to work with, but let's make most of them "good".
-```{r, message=FALSE, tidy=TRUE}
+```{r, message=FALSE}
 p<-10; k<-8; n<-20
-output <- run_simulation(n,p,k,alpha,m)
-output
+output <- run_simulation(n,p,k,alpha,m); output
 ```
 
 \newpage
 Now, let's revert back to our original input parameters and change the alpha to see what happens.
 ```{r, message=FALSE}
-n<-100; p<-30; k<-15; alpha<-0.01
-output <- run_simulation(n,p,k,alpha,m)
-output
+n<-100; p<-30; k<-15; alpha<-0.02
+output <- run_simulation(n,p,k,alpha,m); output
 ```
 
 \newpage
 Finally, let's make it really work.  Let's say we have 500 data points on 100 predictor variables, of which 35 of them are "valid". We will run the simulation 10,000 times using $\alpha = 0.05$.  Let's see how it plays out!
-```{r}
+```{r, message=FALSE}
 n<-500; p<-100; k<-35; alpha<-0.05; m<-10000
-output <- run_simulation(n,p,k,alpha,m)
-output
+output <- run_simulation(n,p,k,alpha,m); output
+```
+
+\newpage
+In conclusion, it is clear to me that our assumptions about how inferential statistics applies to regression coefficients in multiple linear regression problems are being violated. Every time we run a simulation, our confidence intervals contain the known parameter at a lower percentage than they should. i.e.
+$$\begin{split}
+Pr(b_j^L \le \beta_j \le b_j^U)_{obs} <&\; Pr(b_j^L \le \beta_j \le b_j^U)_{pred}\\
+Pr(b_j^L \le \beta_j \le b_j^U)_{obs} <&\; (1-\alpha)
+\end{split}$$ 
+
+Additionally, OLS regression finds the unused predictor variables to be significant at a higher rate than it should. i.e.
+$$\begin{split}
+Pr(\text{Type I Error})_{obs} >&\; Pr(\text{Type I Error})_{pred} \\
+Pr(\text{Type I Error})_{obs} >&\; \alpha
+\end{split}$$ 
+
+Now, this only seems to be an issue when $p>1$. When we're living in the world of simple linear regression, our model is about as accurate as we would predict. e.g.
+```{r, message=FALSE}
+output2 <- run_simulation(100,1,1,0.10,1000); output2
+output2 <- run_simulation(100,1,1,0.10,1000); output2
+output2 <- run_simulation(100,1,1,0.10,1000); output2
+output2 <- run_simulation(100,1,1,0.10,1000); output2
 ```
 
 
+There is a lot of literature out there on model selection and post-model inference, and many/most authors have suggested that the reason for the difference between expectation and reality stems from the added randomness that comes in the model selection process itself. Be it backward elimination, forward selection, or any other type of stochastic model selection process, the process itself adds variability and randomness that isn't taken into account by our standard t-tests for the significance of OLS regression coefficients.
 
 
 
