@@ -3,7 +3,7 @@
 library(testthat)
 library(alr4)
 
-context("Check Backwards Elimination Algorithm")
+context("Check Dimensions of Simulated Data Frame")
 source("FinalProject.R")
 
 test_that("DF dimension are exactly n x (p+1)", {
@@ -12,13 +12,20 @@ test_that("DF dimension are exactly n x (p+1)", {
         expect_equal(dim(make_data_frame(3,1,1)), c(3,2))
 })
 
+context("Verify That Bad Inputs to run_simulation Return Appropriate Messages")
+source("FinalProject.R")
+
 test_that("run_simulation kicks out for appropriate erronious inputs", {
         expect_equal(run_simulation(20,20,10,.10,5), "n must be at least p+2")
         expect_equal(run_simulation(20,-20,10,.10,5), "n and p must be positive integers")
         expect_equal(run_simulation(50,20,10.5,.10,5), "k must be a positive integer not exceeding p")
         expect_equal(run_simulation(50,20,10,1.10,5), "alpha must be in the interval (0,1)")
-        expect_equal(run_simulation(50,20,10,1.10,5.5), "m must be a positive integer")
+        expect_equal(run_simulation(50,20,10,0.10,5.5), "m must be a positive integer")
 })
+
+context("Check Output of run_BE_once For Removal of Correct Variable (if Any)")
+source("FinalProject.R")
+
 
 ## Using known data frames to verify correct variable is being removed in run_BE
 df101 <- BigMac2003

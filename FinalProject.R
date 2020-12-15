@@ -25,10 +25,10 @@ make_model_matrix <- function(n,p) {
         }
 }
 
-X1 <- make_model_matrix(-5,11); X1
-X1 <- make_model_matrix(5,11); X1
-X1 <- make_model_matrix(11.2,5); X1
-X1 <- make_model_matrix(11,5); X1
+#X1 <- make_model_matrix(-5,11); X1
+#X1 <- make_model_matrix(5,11); X1
+#X1 <- make_model_matrix(11.2,5); X1
+#X1 <- make_model_matrix(11,5); X1
 
 
 ## Makes a vector of response values (y's) based on the first k predictor variables (x's)
@@ -46,9 +46,9 @@ make_response_vector <- function(pred_mat, k) {
         }
 }
 
-Y1 <- make_response_vector(X1, 0.5); Y1
-Y1 <- make_response_vector(X1, 20); Y1
-Y1 <- make_response_vector(X1, 2); Y1
+#Y1 <- make_response_vector(X1, 0.5); Y1
+#Y1 <- make_response_vector(X1, 20); Y1
+#Y1 <- make_response_vector(X1, 2); Y1
 
 
 ## creates a data frame of predictors and the response
@@ -83,7 +83,7 @@ run_BE <- function(n,p,k,alpha) {
       coef_mat <- summary(lm1)$coefficients
       maxp_ind <- which.max(coef_mat[-1,4])
       maxp_val <- coef_mat[1+maxp_ind,4]
-    }  ## Saved a bunch of time in the while loop by only making it evaluate the linear model
+    }
     display <- cbind(coef_mat,confint(lm1,level = (1-alpha)),vector(length = nrow(coef_mat)))
     colnames(display)[7] <- "Known Param in CI?"
     display[1,7] <- (0 >= display[1,5]) & (0 <= display[1,6])
@@ -95,9 +95,9 @@ run_BE <- function(n,p,k,alpha) {
     }
 }
 
-BE1 <- run_BE(10,50,10,0.05); BE1
-BE1 <- run_BE(100,50,15,1.2); BE1
-BE1 <- run_BE(100,50,15,0.10); BE1
+#BE1 <- run_BE(10,50,10,0.05); BE1
+#BE1 <- run_BE(100,50,15,1.2); BE1
+#BE1 <- run_BE(100,50,15,0.10); BE1
 
 
 ## Runs m simulations of backwards elimination and prints the % of the time each predictor variable was
@@ -138,22 +138,24 @@ run_simulation <- function(n,p,k,alpha,m) {
   }
 }
 
-n <- 50
-p <- 10
-k <- 5
-alpha <- 0.08
-m <- 10000
+#n <- 50
+#p <- 10
+#k <- 5
+#alpha <- 0.08
+#m <- 10000
 
-BE <- run_BE(n,p,k,alpha)
-BE
+#BE <- run_BE(n,p,k,alpha)
+#BE
 
 #output <- run_simulation(n,p,k,alpha,m)
 #output
 
-output2 <- run_simulation(100,1,1,0.10,1000); output2
+#output2 <- run_simulation(100,1,1,0.10,1000); output2
 
 
-### For the test_that ONLY
+### For the test_that ONLY. Takes existing data frame and an alpha and runs one round of 
+### Backwards Elimination on it. Returns updated coefficient matrix without appending the 
+### CI bounds or CI indicator column.
 run_BE_once <- function(df, alpha) {
   linmod <- lm(Y~.,df)
   coef_mat <- summary(linmod)$coefficients
