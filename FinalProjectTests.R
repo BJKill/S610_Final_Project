@@ -20,7 +20,7 @@ test_that("run_simulation kicks out for appropriate erronious inputs", {
         expect_equal(run_simulation(50,20,10,1.10,5.5), "m must be a positive integer")
 })
 
-## Using known data frames to verify correct variable is being removed
+## Using known data frames to verify correct variable is being removed in run_BE
 df101 <- BigMac2003
 df101 <- cbind(df101[,-1],df101[,1])
 colnames(df101) <- c("V1", "V2","V3", "V4", "V5", "V6", "V7", "V8", "V9", "Y")
@@ -41,7 +41,7 @@ lm103 <- lm(Y~.,df103)
 summary(lm103)
 lm103.1 <- lm(Y~.-V5,df103)
 
-test_that("run_BE correctly identifies and eliminates insignificant variables", {
+test_that("run_BE correctly identifies and eliminates most insignificant variable", {
         expect_equal(run_BE_once(df101,0.10), summary(lm101.1)$coefficients)
         expect_equal(run_BE_once(df102,0.10), summary(lm102)$coefficients)
         expect_equal(run_BE_once(df102,0.01), summary(lm102.1)$coefficients)
