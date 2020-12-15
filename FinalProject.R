@@ -152,3 +152,20 @@ BE
 
 output2 <- run_simulation(100,1,1,0.10,1000); output2
 
+
+### For the test_that ONLY
+run_BE_once <- function(df, alpha) {
+  linmod <- lm(Y~.,df)
+  coef_mat <- summary(linmod)$coefficients
+  maxp_ind <- which.max(coef_mat[-1,4])
+  maxp_val <- coef_mat[1+maxp_ind,4]
+  if(maxp_val > alpha) {
+    rem_inx <- maxp_ind
+    df <- df[,-rem_inx]
+    lm1 <- lm(Y~.,df)
+    coef_mat <- summary(lm1)$coefficients
+    maxp_ind <- which.max(coef_mat[-1,4])
+    maxp_val <- coef_mat[1+maxp_ind,4]
+  }
+  return(coef_mat)
+}
